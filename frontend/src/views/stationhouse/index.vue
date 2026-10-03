@@ -18,6 +18,22 @@
       </article>
     </div>
 
+    <section class="review-panel">
+      <h3 class="review-title">仪器核查</h3>
+      <ul v-if="reviewItems.length" class="review-list">
+        <li v-for="todo in reviewItems" :key="todo.id" class="review-item" :class="{ done: todo.done }">
+          <div class="review-body">
+            <strong>{{ todo.title }}</strong>
+            <p>{{ todo.detail }}</p>
+            <span class="text-muted">来源：仪器检定临期台账 · {{ formatDateText(todo.createdAt) }}</span>
+          </div>
+          <span v-if="todo.done" class="tag tag-ok">已核查 · {{ formatDateText(todo.completedAt) }}</span>
+          <button v-else class="btn" type="button" @click="finishTodo(todo.id)">标记核查完成</button>
+        </li>
+      </ul>
+      <p v-else class="text-muted review-empty">暂无仪器核查事项，在「仪器检定 - 临期台账」确认视图后自动生成。</p>
+    </section>
+
     <p class="status-legend">
       <span v-for="item in statusSummary" :key="item.status" class="legend-item">
         {{ item.status }}：{{ item.count }}
@@ -75,11 +91,13 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  finishReviewTodo,
   listEntries,
   moduleMeta,
+  reviewTodos,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, ReviewTodo } from '@/data/types'
 
 const meta = moduleMeta('stationhouse')
 const columns = ["记录编号", "站点编号", "维护类型", "维护内容", "维护单位", "维护日期", "费用支出", "维护状态"]
@@ -92,12 +110,38 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const reviewItems = ref<ReviewTodo[]>([])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function formatDateText(iso: string): string {
+  if (!iso) {
+    return ''
+  }
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return iso
+  }
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function reloadReviewTodos() {
+  reviewItems.value = reviewTodos('stationhouse')
+}
+
+function finishTodo(id: number) {
+  const result = finishReviewTodo(id)
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  reloadReviewTodos()
+}
 
 function resetFilters() {
   filters.value = {}
@@ -133,5 +177,8 @@ function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  reloadReviewTodos()
+})
 </script>
