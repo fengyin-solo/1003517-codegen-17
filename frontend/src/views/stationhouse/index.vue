@@ -24,6 +24,43 @@
       </span>
     </p>
 
+    <section class="todo-panel">
+      <header class="todo-head">
+        <h3>站房待办</h3>
+        <span class="todo-count">待安排 {{ pendingRows.length }} 项</span>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>记录编号</th>
+            <th>维护类型</th>
+            <th>维护内容</th>
+            <th>维护单位</th>
+            <th>维护日期</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in pendingRows" :key="`todo-${String(row.id)}`">
+            <td>{{ row['记录编号'] ?? '—' }}</td>
+            <td>
+              {{ row['维护类型'] ?? '—' }}
+              <span v-if="isInstrumentCheck(row)" class="badge badge-check">仪器核查</span>
+            </td>
+            <td>{{ row['维护内容'] ?? '—' }}</td>
+            <td>{{ row['维护单位'] ?? '—' }}</td>
+            <td>{{ row['维护日期'] ?? '—' }}</td>
+            <td class="row-actions">
+              <button class="link" type="button" @click="runAction('安排维护', row)">安排维护</button>
+            </td>
+          </tr>
+          <tr v-if="!pendingRows.length">
+            <td colspan="6" class="empty-state">暂无待安排事项，临期台账确认后会在此生成仪器核对待办</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -80,6 +117,7 @@ import {
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
+import { CALIBRATION_CHECK_TYPE } from '@/domain/followup'
 
 const meta = moduleMeta('stationhouse')
 const columns = ["记录编号", "站点编号", "维护类型", "维护内容", "维护单位", "维护日期", "费用支出", "维护状态"]
@@ -98,6 +136,16 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+// 站房待办：待安排事项排前，仪器检定临期台账确认后生成的仪器核查会固定进入这里。
+const pendingRows = computed(() =>
+  rows.value
+    .filter((row) => String(row.status) === '待安排')
+    .sort((a, b) => (isInstrumentCheck(a) === isInstrumentCheck(b) ? 0 : isInstrumentCheck(a) ? -1 : 1)),
+)
+
+function isInstrumentCheck(row: EntryRow): boolean {
+  return String(row['维护类型'] ?? '') === CALIBRATION_CHECK_TYPE
+}
 
 function resetFilters() {
   filters.value = {}
@@ -135,3 +183,12 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.todo-panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+.todo-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.todo-head h3 { margin: 0; font-size: 15px; }
+.todo-count { font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 12px; margin-left: 4px; }
+.badge-check { background: #e0eaff; color: #1d4ed8; }
+</style>
